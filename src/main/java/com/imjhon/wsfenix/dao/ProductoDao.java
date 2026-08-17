@@ -27,4 +27,7 @@ public interface ProductoDao extends JpaRepository<Producto, ProductoPk> {
             "WHERE (l.id.fechaFin IS NULL OR l.id.fechaFin >= CURRENT_DATE) " +
             "ORDER BY l.id.secLocal ASC")
     List<Producto> findAllWithLocales();
+
+    @Query("SELECT COUNT(DISTINCT p.id.secProducto) FROM Producto p WHERE p.id.fechaFin >= CURRENT_DATE")
+    long countProductosActivos();
 }
