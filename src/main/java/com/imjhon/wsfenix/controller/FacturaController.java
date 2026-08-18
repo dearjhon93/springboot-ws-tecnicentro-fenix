@@ -29,8 +29,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:4200")
-//@CrossOrigin(origins = "https://vercel.app")
 @RequestMapping("/facturas")
 public class FacturaController {
 

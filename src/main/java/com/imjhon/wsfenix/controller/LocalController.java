@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 
 @RestController
-//@CrossOrigin(origins = "https://vercel.app")
 @RequestMapping("/locales")
 public class LocalController {
 
