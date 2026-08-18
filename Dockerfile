@@ -1,16 +1,10 @@
-# Build stage
-FROM maven:3.9.9-eclipse-temurin-17 AS build
-WORKDIR /app
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
-COPY src ./src
-RUN mvn package -DskipTests -B
+# Paso 1: Compilar la aplicación usando Maven
+FROM maven:3.9.6-eclipse-temurin-17 AS build
+COPY . .
+RUN mvn clean package -DskipTests
 
-# Runtime stage
+# Paso 2: Ejecutar la aplicación con una imagen ligera de Java
 FROM eclipse-temurin:17-jdk-alpine
-WORKDIR /app
-RUN useradd -r -u 1001 appuser
-COPY --from=build /app/target/wsfenix-0.0.1-SNAPSHOT.jar app.jar
-USER appuser
+COPY --from=build /target/*.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
