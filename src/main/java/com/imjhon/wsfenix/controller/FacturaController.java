@@ -181,9 +181,10 @@ public class FacturaController {
                 ProductoLocal nuevoProdLocal = new ProductoLocal();
                 nuevoProdLocal.setId(plPk);
                 nuevoProdLocal.setFechaInicio(LocalDateTime.now());
-                nuevoProdLocal.setCantidad(prod.getCantidad().intValue());
+                nuevoProdLocal.setCantidad(prod.getCantidadModificada().intValue());
                 nuevoProdLocal.setFechaIngreso(LocalDateTime.now());
                 nuevoProdLocal.setCodUsuarioIngreso("1");
+                //nuevoProdLocal.setPorcentaje(prod.getPorcentajeLocal()); /*Save porcentaje*/
                 repoProductoLocal.save(nuevoProdLocal);
 
             } else {

@@ -1,14 +1,15 @@
 package com.imjhon.wsfenix.dto;
 
+import com.imjhon.wsfenix.entity.Usuario;
 import lombok.Data;
 
 @Data
 public class LoginResponse {
-    private String message;
-    private String username;
+    private String mensaje;
+    private Usuario usuario;
 
-    public LoginResponse(String message, String username) {
-        this.message = message;
-        this.username = username;
+    public LoginResponse(String mensaje, Usuario usuario) {
+        this.mensaje = mensaje;
+        this.usuario = usuario;
     }
 }

@@ -22,6 +22,10 @@ public class FacturaDetalleDto {
     @Min(value = 0, message = "La cantidad debe ser mayor a cero")
     private Double cantidad;
 
+    @NotNull(message = "La cantidad modificada es obligatoria")
+    @Min(value = 0, message = "La cantidad debe ser mayor a cero")
+    private Double cantidadModificada;
+
     @NotNull(message = "El precio unitario es obligatorio")
     @Min(value = 0, message = "El precio unitario no puede ser negativo")
     private Double precioUnitario;
@@ -40,4 +44,8 @@ public class FacturaDetalleDto {
     @NotNull(message = "El precio de venta (PVP) es obligatorio por cada producto")
     @Min(value = 0, message = "El PVP debe ser mayor a cero")
     private Double precioVentaPvp;
+
+    @NotNull(message = "El porcentaje del local al producto es obligatorio")
+    private Integer porcentajeLocal;
+
 }

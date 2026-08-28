@@ -16,9 +16,7 @@ public class Login {
     private UsuarioDao repoUsuario;
 
     @PostMapping
-    public LoginResponse login(
-            @RequestBody LoginRequest request
-    ) {
+    public LoginResponse login(@RequestBody LoginRequest request) {
         Usuario user = repoUsuario.findByAlias(request.getUsername())
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
@@ -26,6 +24,7 @@ public class Login {
             throw new RuntimeException("Contraseña incorrecta");
         }
 
-        return new LoginResponse("Login exitoso", user.getAlias());
+        // Pasamos el objeto 'user' completo al constructor
+        return new LoginResponse("Login exitoso", user);
     }
 }
