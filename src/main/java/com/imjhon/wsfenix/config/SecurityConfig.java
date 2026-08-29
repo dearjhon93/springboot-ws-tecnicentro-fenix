@@ -36,8 +36,13 @@ public class SecurityConfig {
         configuration.setAllowCredentials(true);
         configuration.setExposedHeaders(List.of("Authorization")); // Por si usas JWT en la respuesta
 
+        /*UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return new CorsFilter(source);*/
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/wsfenix/**", configuration);
+
         return new CorsFilter(source);
     }
 
