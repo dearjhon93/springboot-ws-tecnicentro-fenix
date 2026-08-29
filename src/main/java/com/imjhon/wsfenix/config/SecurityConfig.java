@@ -39,15 +39,19 @@ public class SecurityConfig {
         /*UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return new CorsFilter(source);*/
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        /*UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         source.registerCorsConfiguration("/wsfenix/**", configuration);
+        return new CorsFilter(source);*/
 
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
         return new CorsFilter(source);
+
     }
 
     // 2. Filtros de Seguridad tradicionales
-    @Bean
+    /*@Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 // Desactivamos el CORS de Spring Security por defecto ya que usamos el CorsFilter prioritario
@@ -57,6 +61,20 @@ public class SecurityConfig {
                         // Garantía doble: permitir preflights a nivel de seguridad también
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/wsfenix/api/v1/login").permitAll()
+                        .anyRequest().authenticated()
+                );
+
+        return http.build();
+    }*/
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+                // Desactivamos el CORS integrado porque usamos el CorsFilter prioritario de arriba
+                .cors(cors -> cors.disable())
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/login").permitAll()
                         .anyRequest().authenticated()
                 );
 
