@@ -7,6 +7,8 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import java.sql.Date;
@@ -53,6 +55,7 @@ public class ProductoLocal {
             @JoinColumn(name = "fecha_fin", referencedColumnName = "fecha_fin", insertable = false, updatable = false),
             @JoinColumn(name = "sec_producto", referencedColumnName = "sec_producto", insertable = false, updatable = false)
     })
+    @NotFound(action = NotFoundAction.IGNORE)
     @JsonBackReference
     private Producto producto;
 
