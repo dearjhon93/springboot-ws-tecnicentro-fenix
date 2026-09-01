@@ -50,8 +50,8 @@ public class ProductoLocal {
 
     @ManyToOne
     @JoinColumns({
-            @JoinColumn(name = "sec_producto", referencedColumnName = "sec_producto", insertable = false, updatable = false),
-            @JoinColumn(name = "fecha_fin", referencedColumnName = "fecha_fin", insertable = false, updatable = false)
+            @JoinColumn(name = "fecha_fin", referencedColumnName = "fecha_fin", insertable = false, updatable = false),
+            @JoinColumn(name = "sec_producto", referencedColumnName = "sec_producto", insertable = false, updatable = false)
     })
     @JsonBackReference
     private Producto producto;

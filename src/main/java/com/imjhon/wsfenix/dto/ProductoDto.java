@@ -8,7 +8,7 @@ import java.util.List;
 
 @Data
 public class ProductoDto {
-    private Integer secProducto;
+    private Long secProducto;
     private String codProductoProveedor;
     private String descripcion;
     private BigDecimal precioVenta;

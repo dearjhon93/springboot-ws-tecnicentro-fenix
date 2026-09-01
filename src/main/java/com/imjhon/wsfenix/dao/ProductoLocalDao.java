@@ -14,5 +14,5 @@ import java.time.LocalDateTime;
 public interface ProductoLocalDao extends JpaRepository<ProductoLocal, ProductoLocalPk> {
 
     @Query("SELECT p FROM ProductoLocal p WHERE p.id.secLocal = :secLocal AND p.id.secProducto = :secProducto AND p.id.fechaFin = :fechaFin")
-    ProductoLocal findById(Long secLocal, Integer secProducto, LocalDateTime fechaFin);
+    ProductoLocal findById(Long secLocal, Long secProducto, LocalDateTime fechaFin);
 }

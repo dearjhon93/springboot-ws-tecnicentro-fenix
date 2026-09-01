@@ -19,7 +19,7 @@ import java.util.Objects;
 public class ProductoPk implements Serializable {
 
     @Column(name = "sec_producto")
-    private Integer secProducto;
+    private long secProducto;
 
     @Column(name = "fecha_fin")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd/MM/yyyy HH:mm:ss")

@@ -22,7 +22,7 @@ public class ProductoLocalPk implements Serializable {
     private long secLocal;
 
     @Column(name = "sec_producto")
-    private Integer secProducto;
+    private long secProducto;
 
     @Column(name = "fecha_fin")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
