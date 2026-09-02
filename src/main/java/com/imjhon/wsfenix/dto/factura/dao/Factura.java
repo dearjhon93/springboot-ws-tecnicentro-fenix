@@ -13,9 +13,13 @@ import java.util.List;
 @Entity
 @Table(name = "factura")
 public class Factura {
-    @Id
+    /*@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long id;*/
+
+    @Id
+    @Column(name = "id")
+    private long id;
 
     // InfoTributariaDto
     private String ambiente;

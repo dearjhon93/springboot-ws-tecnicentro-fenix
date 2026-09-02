@@ -53,6 +53,7 @@ public class ProductoController {
                 listapl.add(pl);
             }
             res.setLocales(listapl);
+            res.setNomProveedor("");
             listaProd.add(res);
         }
         ApiResponse<List<ProductoDto>> response = new ApiResponse<>(

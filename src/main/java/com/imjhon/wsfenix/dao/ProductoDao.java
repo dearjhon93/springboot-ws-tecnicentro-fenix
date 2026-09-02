@@ -24,7 +24,7 @@ public interface ProductoDao extends JpaRepository<Producto, ProductoPk> {
     //@Query("SELECT DISTINCT p FROM Producto p LEFT JOIN FETCH p.locales")
     @Query("SELECT DISTINCT p FROM Producto p " +
             "LEFT JOIN FETCH p.locales l " +
-            "WHERE (l.id.fechaFin IS NULL OR l.id.fechaFin >= CURRENT_DATE) " +
+            "WHERE (l.id.fechaFin >= CURRENT_DATE) and (p.id.fechaFin >= CURRENT_DATE) " +
             "ORDER BY l.id.secLocal ASC")
     List<Producto> findAllWithLocales();
 

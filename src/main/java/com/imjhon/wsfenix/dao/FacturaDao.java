@@ -17,4 +17,7 @@ public interface FacturaDao extends JpaRepository<Factura,Long> {
     // Total acumulado de las facturas registradas
     @Query("SELECT COALESCE(SUM(f.importeTotal), 0) FROM Factura f")
     BigDecimal sumImporteTotal();
+
+    @Query("SELECT COALESCE(MAX(f.id), 0) FROM Factura f")
+    Integer getMaxSecuencia();
 }

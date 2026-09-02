@@ -14,4 +14,5 @@ public class ProductoDto {
     private BigDecimal precioVenta;
     private String codEstado;
     private List<ProductoLocalDto> locales;
+    private String nomProveedor;
 }

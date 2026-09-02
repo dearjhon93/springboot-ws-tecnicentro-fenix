@@ -60,4 +60,7 @@ public class Producto {
     @OneToMany(mappedBy = "producto", fetch = FetchType.LAZY)
     @JsonManagedReference
     private List<ProductoLocal> locales;
+
+    @Column(name = "cod_id_factura")
+    private Long codIdFactura;
 }

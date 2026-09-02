@@ -78,6 +78,7 @@ public class FacturaController {
 
         // 2. INSTANCIAR Y MAPEAR LA CABECERA GENERAL DE LA FACTURA
         Factura nuevaFactura = new Factura();
+        nuevaFactura.setId(getSiguienteSecuenciaFactura());
         nuevaFactura.setContribuyente(contribuyente);
 
         // Mapeo InfoTributaria
@@ -172,6 +173,7 @@ public class FacturaController {
                 nuevoProducto.setFechaIngreso(LocalDateTime.now());
                 nuevoProducto.setCodUsuarioIngreso("1");
                 nuevoProducto.setCodBarra(null);
+                nuevoProducto.setCodIdFactura(nuevaFactura.getId());
                 nuevoProducto = repoProducto.save(nuevoProducto);
 
                 /*Crear en PRODUCTOLOCALES*/
@@ -203,6 +205,7 @@ public class FacturaController {
                     existeProducto.setPrecioVenta(new BigDecimal(prod.getPrecioVentaPvp()));
                     existeProducto.setCodUsuarioModificacion("1");
                     existeProducto.setFechaModificacion(LocalDateTime.now());
+                    existeProducto.setCodIdFactura(nuevaFactura.getId());
                     repoProducto.save(existeProducto);
 
                     ProductoLocal existeProdLocal = repoProductoLocal.findById(
@@ -241,7 +244,7 @@ public class FacturaController {
 
         // 6. GUARDADO EN CASCADA DE LA FACTURA ELECTRÓNICA COMPLETA
         if (count > 0) {
-            repoFactura.save(nuevaFactura);
+            nuevaFactura = repoFactura.save(nuevaFactura);
         }
 
         // 7. RESPUESTA DE LA API SEGÚN EL RESULTADO DEL PROCESAMIENTO
@@ -268,6 +271,11 @@ public class FacturaController {
 
     public Integer getSiguienteSecuencia() {
         Integer maxActual = repoProducto.getMaxSecuencia();
+        return maxActual + 1;
+    }
+
+    public Integer getSiguienteSecuenciaFactura() {
+        Integer maxActual = repoFactura.getMaxSecuencia();
         return maxActual + 1;
     }
 }
