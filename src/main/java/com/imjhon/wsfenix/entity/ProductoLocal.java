@@ -42,6 +42,9 @@ public class ProductoLocal {
     @Column(name = "cod_usuario_ingreso")
     private String codUsuarioIngreso;
 
+    @Column(name = "id_factura")
+    private Long idFactura;
+
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @Column(name = "fecha_modificacion")
@@ -58,5 +61,6 @@ public class ProductoLocal {
     @NotFound(action = NotFoundAction.IGNORE)
     @JsonBackReference
     private Producto producto;
+
 
 }

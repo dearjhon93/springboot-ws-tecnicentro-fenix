@@ -15,4 +15,5 @@ public class ProductoDto {
     private String codEstado;
     private List<ProductoLocalDto> locales;
     private String nomProveedor;
+    private List<ProductoHistorialDto> historial;
 }

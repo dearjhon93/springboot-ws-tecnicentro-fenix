@@ -11,6 +11,7 @@ import com.imjhon.wsfenix.dto.factura.FacturaDto;
 import com.imjhon.wsfenix.dto.factura.ImpuestoDetalleDto;
 import com.imjhon.wsfenix.dto.factura.PagoDto;
 import com.imjhon.wsfenix.dto.factura.dao.*;
+import com.imjhon.wsfenix.dto.factura.response.*;
 import com.imjhon.wsfenix.entity.Producto;
 import com.imjhon.wsfenix.entity.ProductoLocal;
 import com.imjhon.wsfenix.entity.ProductoLocalPk;
@@ -21,12 +22,15 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.List;
 
 @RestController
 @RequestMapping("/facturas")
@@ -44,229 +48,895 @@ public class FacturaController {
     @Autowired
     private ContribuyenteDao repoContribuyente;
 
+
+    /*@GetMapping("/compras")
+    public ResponseEntity<?> obtenerFacturasCompras() {
+
+        List<Factura> facturas =
+                repoFactura.findTodasConDetalles();
+
+        List<FacturaResponseDto> respuesta =
+                facturas.stream()
+                        .map(this::convertirFacturaDto)
+                        .toList();
+
+        ApiResponse<List<FacturaResponseDto>> response =
+                new ApiResponse<>(
+                        HttpStatus.OK.value(),
+                        respuesta.isEmpty()
+                                ? "NO SE ENCONTRARON FACTURAS"
+                                : "FACTURAS ENCONTRADAS",
+                        respuesta
+                );
+
+        return ResponseEntity.ok(response);
+    }*/
+
+    @Transactional
     @PostMapping("/guardar")
     public ResponseEntity<?> guardarFactura(
             @Valid @RequestBody FacturaDto facturaDto
     ) {
 
-        // Ejemplo de lectura de datos aninados y enriquecidos:
+        final LocalDateTime ahora = LocalDateTime.now();
+
         String localDestino = facturaDto.getCodigoLocal();
-        String rucEmisor = facturaDto.getInfoTributaria().getRuc();
-        Double total = facturaDto.getInfoFactura().getImporteTotal();
 
-        // 0. VALIDACIÓN DE DUPLICADOS: la clave de acceso es única por factura
-        String claveAcceso = facturaDto.getInfoTributaria().getClaveAcceso();
+        String claveAcceso =
+                facturaDto.getInfoTributaria().getClaveAcceso();
+
+        /*
+         * ============================================================
+         * 1. VALIDAR FACTURA DUPLICADA
+         * ============================================================
+         */
         if (repoFactura.existsByClaveAcceso(claveAcceso)) {
-            ApiResponse<ProductoResponse> duplicada = new ApiResponse<>(
-                    HttpStatus.CONFLICT.value(),
-                    "LA FACTURA YA FUE REGISTRADA ANTERIORMENTE",
-                    null
-            );
-            return new ResponseEntity<>(duplicada, HttpStatus.CONFLICT);
-        }
 
-        // 1. OBTENER O CREAR EL CONTRIBUYENTE (COMPRADOR)
-        Contribuyente contribuyente = repoContribuyente.findByIdentificacion(facturaDto.getInfoFactura().getIdentificacionComprador())
-                .orElseGet(() -> {
-                    Contribuyente nuevoC = new Contribuyente();
-                    nuevoC.setTipoIdentificacion(facturaDto.getInfoFactura().getTipoIdentificacionComprador());
-                    nuevoC.setIdentificacion(facturaDto.getInfoFactura().getIdentificacionComprador());
-                    nuevoC.setRazonSocial(facturaDto.getInfoFactura().getRazonSocialComprador());
-                    nuevoC.setDireccion(facturaDto.getInfoFactura().getDireccionComprador());
-                    return repoContribuyente.save(nuevoC);
-                });
-
-        // 2. INSTANCIAR Y MAPEAR LA CABECERA GENERAL DE LA FACTURA
-        Factura nuevaFactura = new Factura();
-        nuevaFactura.setId(getSiguienteSecuenciaFactura());
-        nuevaFactura.setContribuyente(contribuyente);
-
-        // Mapeo InfoTributaria
-        nuevaFactura.setAmbiente(facturaDto.getInfoTributaria().getAmbiente());
-        nuevaFactura.setTipoEmision(facturaDto.getInfoTributaria().getTipoEmision());
-        nuevaFactura.setRazonSocial(facturaDto.getInfoTributaria().getRazonSocial());
-        nuevaFactura.setNombreComercial(facturaDto.getInfoTributaria().getNombreComercial());
-        nuevaFactura.setRuc(facturaDto.getInfoTributaria().getRuc());
-        nuevaFactura.setClaveAcceso(facturaDto.getInfoTributaria().getClaveAcceso());
-        nuevaFactura.setCodDoc(facturaDto.getInfoTributaria().getCodDoc());
-        nuevaFactura.setEstab(facturaDto.getInfoTributaria().getEstab());
-        nuevaFactura.setPtoEmi(facturaDto.getInfoTributaria().getPtoEmi());
-        nuevaFactura.setSecuencial(facturaDto.getInfoTributaria().getSecuencial());
-        nuevaFactura.setDirMatriz(facturaDto.getInfoTributaria().getDirMatriz());
-
-        // Mapeo InfoFactura Totales
-        nuevaFactura.setDirEstablecimiento(facturaDto.getInfoFactura().getDirEstablecimiento());
-        nuevaFactura.setFechaEmision(LocalDate.parse(facturaDto.getInfoFactura().getFechaEmision(), DateTimeFormatter.ofPattern("dd/MM/yyyy")));
-        nuevaFactura.setTotalSinImpuestos(BigDecimal.valueOf(facturaDto.getInfoFactura().getTotalSinImpuestos()));
-        nuevaFactura.setTotalDescuento(BigDecimal.valueOf(facturaDto.getInfoFactura().getTotalDescuento()));
-        nuevaFactura.setImporteTotal(BigDecimal.valueOf(facturaDto.getInfoFactura().getImporteTotal()));
-
-        // Estados por defecto del flujo electrónico del SRI
-        nuevaFactura.setEstadoSri("AUTORIZADO");
-        nuevaFactura.setFechaAutorizacion(LocalDateTime.now());
-        nuevaFactura.setNumeroAutorizacion(facturaDto.getInfoTributaria().getClaveAcceso());
-
-        // 3. MAPEO E INTEGRACIÓN DE LAS FORMAS DE PAGO DE LA FACTURA
-        if (facturaDto.getInfoFactura().getPagos() != null && facturaDto.getInfoFactura().getPagos().getPago() != null) {
-            for (PagoDto pagoDto : facturaDto.getInfoFactura().getPagos().getPago()) {
-                FormaPago fp = new FormaPago();
-                fp.setFormaPago(pagoDto.getFormaPago());
-                fp.setTotal(BigDecimal.valueOf(pagoDto.getTotal()));
-                fp.setPlazo(BigDecimal.valueOf(pagoDto.getPlazo() != null ? pagoDto.getPlazo() : 0));
-                fp.setUnidadTiempo(pagoDto.getUnidadTiempo() != null ? pagoDto.getUnidadTiempo() : "dias");
-                nuevaFactura.addFormaPago(fp);
-            }
-        }
-
-        // Iteramos los productos leídos del XML que ya tienen el PVP integrado
-        int count = 0;
-        for (FacturaDetalleDto prod : facturaDto.getDetalles().getDetalle()) {
-            System.out.println("Producto: " + prod.getDescripcion() + " -> PVP Ingresado: $" + prod.getPrecioVentaPvp());
-
-            // 4. CONSTRUCCIÓN DE CADA DETALLE DE COMPRA JUNTO A SUS IMPUESTOS ASOCIADOS
-            FacturaDetalle detalleEntidad = new FacturaDetalle();
-            detalleEntidad.setCodigoPrincipal(prod.getCodigoPrincipal());
-            detalleEntidad.setCodigoAuxiliar(prod.getCodigoAuxiliar() != null ? prod.getCodigoAuxiliar() : prod.getCodigoPrincipal());
-            detalleEntidad.setDescripcion(prod.getDescripcion());
-            detalleEntidad.setCantidad(BigDecimal.valueOf(prod.getCantidad()));
-            detalleEntidad.setPrecioUnitario(BigDecimal.valueOf(prod.getPrecioUnitario()));
-            detalleEntidad.setDescuento(prod.getDescuento() != null ? BigDecimal.valueOf(prod.getDescuento()) : new BigDecimal("0.00"));
-            detalleEntidad.setPrecioTotalSinImpuesto(BigDecimal.valueOf(prod.getPrecioTotalSinImpuesto()));
-
-            // Desglose de impuestos individuales del ítem (IVA, ICE)
-            if (prod.getImpuestos() != null && prod.getImpuestos().getImpuesto() != null) {
-                for (ImpuestoDetalleDto impDto : prod.getImpuestos().getImpuesto()) {
-                    DetalleImpuesto di = new DetalleImpuesto();
-                    di.setCodigo(impDto.getCodigo());
-                    di.setCodigoPorcentaje(impDto.getCodigoPorcentaje());
-                    di.setTarifa(BigDecimal.valueOf(impDto.getTarifa()));
-                    di.setBaseInponible(BigDecimal.valueOf(impDto.getBaseImponible()));
-                    di.setValor(BigDecimal.valueOf(impDto.getValor()));
-                    detalleEntidad.addImpuesto(di);
-                }
-            }
-
-            // Añadimos el detalle estructurado a la instancia de la factura madre
-            nuevaFactura.addDetalle(detalleEntidad);
-
-            /* --- INICIO DE TU LÓGICA DE INVENTARIO Y STOCK ACTUAL --- */
-            Producto existeProducto = repoProducto.findByCodProductoProveedor(
-                    prod.getCodigoPrincipal(),
-                    LocalDateTime.of(2999, 12, 31, 0, 0, 0)
-            );
-
-            ProductoPk pk = new ProductoPk();
-            ProductoLocalPk plPk = new ProductoLocalPk();
-            if (existeProducto == null) {
-                /*Crear en PRODUCTO*/
-                Integer nuevaSecuencia = getSiguienteSecuencia();
-                pk.setSecProducto(nuevaSecuencia);
-                pk.setFechaFin(LocalDateTime.of(2999, 12, 31, 0, 0, 0));
-
-                Producto nuevoProducto = new Producto();
-                nuevoProducto.setId(pk);
-                nuevoProducto.setFechaInicio(LocalDateTime.now());
-                nuevoProducto.setCodProductoProveedor(prod.getCodigoPrincipal());
-                nuevoProducto.setDescripcion(prod.getDescripcion());
-                nuevoProducto.setPrecioVenta(new BigDecimal(prod.getPrecioVentaPvp()));
-                nuevoProducto.setCodEstado("ACT");
-                nuevoProducto.setFechaIngreso(LocalDateTime.now());
-                nuevoProducto.setCodUsuarioIngreso("1");
-                nuevoProducto.setCodBarra(null);
-                nuevoProducto.setCodIdFactura(nuevaFactura.getId());
-                nuevoProducto = repoProducto.save(nuevoProducto);
-
-                /*Crear en PRODUCTOLOCALES*/
-                plPk.setSecLocal(Long.parseLong(localDestino));
-                plPk.setSecProducto(nuevaSecuencia);
-                plPk.setFechaFin(LocalDateTime.of(2999, 12, 31, 0, 0, 0));
-                ProductoLocal nuevoProdLocal = new ProductoLocal();
-                nuevoProdLocal.setId(plPk);
-                nuevoProdLocal.setFechaInicio(LocalDateTime.now());
-                nuevoProdLocal.setCantidad(prod.getCantidadModificada().intValue());
-                nuevoProdLocal.setFechaIngreso(LocalDateTime.now());
-                nuevoProdLocal.setCodUsuarioIngreso("1");
-                //nuevoProdLocal.setPorcentaje(prod.getPorcentajeLocal()); /*Save porcentaje*/
-                repoProductoLocal.save(nuevoProdLocal);
-
-            } else {
-                System.out.println("el producto ya existe -- actualizar: " + prod.getCodigoPrincipal());
-
-                if (existeProducto.getCodEstado().equals("ACT")) {
-                    /*Caducar y registrar*/
-                    Producto histProducto = new Producto();
-                    BeanUtils.copyProperties(existeProducto, histProducto, "id");
-                    ProductoPk historialProductoPk = new ProductoPk();
-                    historialProductoPk.setSecProducto(existeProducto.getId().getSecProducto());
-                    historialProductoPk.setFechaFin(LocalDateTime.now());
-                    histProducto.setId(historialProductoPk);
-                    repoProducto.save(histProducto);
-
-                    existeProducto.setPrecioVenta(new BigDecimal(prod.getPrecioVentaPvp()));
-                    existeProducto.setCodUsuarioModificacion("1");
-                    existeProducto.setFechaModificacion(LocalDateTime.now());
-                    existeProducto.setCodIdFactura(nuevaFactura.getId());
-                    repoProducto.save(existeProducto);
-
-                    ProductoLocal existeProdLocal = repoProductoLocal.findById(
-                            Long.parseLong(localDestino),
-                            existeProducto.getId().getSecProducto(),
-                            LocalDateTime.of(2999, 12, 31, 0, 0, 0)
+            ApiResponse<ProductoResponse> duplicada =
+                    new ApiResponse<>(
+                            HttpStatus.CONFLICT.value(),
+                            "LA FACTURA YA FUE REGISTRADA ANTERIORMENTE",
+                            null
                     );
 
-                    /*Caducar y registrar*/
-                    ProductoLocal histProdLocal = new ProductoLocal();
-                    BeanUtils.copyProperties(existeProdLocal, histProdLocal, "id");
-                    ProductoLocalPk histProdLocalPk = new ProductoLocalPk();
-                    histProdLocalPk.setFechaFin(LocalDateTime.now());
-                    histProdLocalPk.setSecLocal(existeProdLocal.getId().getSecLocal());
-                    histProdLocalPk.setSecProducto(existeProdLocal.getId().getSecProducto());
-                    histProdLocal.setId(histProdLocalPk);
-                    repoProductoLocal.saveAndFlush(histProdLocal);
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(duplicada);
+        }
 
-                    // 5. ACTUALIZACIÓN FINAL DE CANTIDADES EN EL LOCAL DEL INVENTARIO
-                    Integer cantidad = existeProdLocal.getCantidad() + prod.getCantidad().intValue();
-                    existeProdLocal.setCantidad(cantidad);
-                    existeProdLocal.setCodUsuarioModificacion("1");
-                    existeProdLocal.setFechaModificacion(LocalDateTime.now());
-                    repoProductoLocal.save(existeProdLocal);
+        /*
+         * ============================================================
+         * 2. OBTENER / CREAR CONTRIBUYENTE
+         * ============================================================
+         */
+        Contribuyente contribuyente =
+                repoContribuyente.findByIdentificacion(
+                        facturaDto
+                                .getInfoFactura()
+                                .getIdentificacionComprador()
+                ).orElseGet(() -> {
 
-                } else {
-                    System.out.println("Producto INACTIVO - NO actualizar: " + prod.getCodigoPrincipal());
+                    Contribuyente nuevoContribuyente =
+                            new Contribuyente();
+
+                    nuevoContribuyente.setTipoIdentificacion(
+                            facturaDto
+                                    .getInfoFactura()
+                                    .getTipoIdentificacionComprador()
+                    );
+
+                    nuevoContribuyente.setIdentificacion(
+                            facturaDto
+                                    .getInfoFactura()
+                                    .getIdentificacionComprador()
+                    );
+
+                    nuevoContribuyente.setRazonSocial(
+                            facturaDto
+                                    .getInfoFactura()
+                                    .getRazonSocialComprador()
+                    );
+
+                    nuevoContribuyente.setDireccion(
+                            facturaDto
+                                    .getInfoFactura()
+                                    .getDireccionComprador()
+                    );
+
+                    return repoContribuyente.save(
+                            nuevoContribuyente
+                    );
+                });
+
+        /*
+         * ============================================================
+         * 3. CREAR FACTURA
+         * ============================================================
+         */
+        Factura nuevaFactura = new Factura();
+
+        /*
+         * El ID debe ser generado antes porque se utiliza como
+         * referencia en Producto y ProductoLocal.
+         */
+        nuevaFactura.setId(
+                getSiguienteSecuenciaFactura()
+        );
+
+        nuevaFactura.setContribuyente(contribuyente);
+
+        nuevaFactura.setAmbiente(
+                facturaDto
+                        .getInfoTributaria()
+                        .getAmbiente()
+        );
+
+        nuevaFactura.setTipoEmision(
+                facturaDto
+                        .getInfoTributaria()
+                        .getTipoEmision()
+        );
+
+        nuevaFactura.setRazonSocial(
+                facturaDto
+                        .getInfoTributaria()
+                        .getRazonSocial()
+        );
+
+        nuevaFactura.setNombreComercial(
+                facturaDto
+                        .getInfoTributaria()
+                        .getNombreComercial()
+        );
+
+        nuevaFactura.setRuc(
+                facturaDto
+                        .getInfoTributaria()
+                        .getRuc()
+        );
+
+        nuevaFactura.setClaveAcceso(
+                facturaDto
+                        .getInfoTributaria()
+                        .getClaveAcceso()
+        );
+
+        nuevaFactura.setCodDoc(
+                facturaDto
+                        .getInfoTributaria()
+                        .getCodDoc()
+        );
+
+        nuevaFactura.setEstab(
+                facturaDto
+                        .getInfoTributaria()
+                        .getEstab()
+        );
+
+        nuevaFactura.setPtoEmi(
+                facturaDto
+                        .getInfoTributaria()
+                        .getPtoEmi()
+        );
+
+        nuevaFactura.setSecuencial(
+                facturaDto
+                        .getInfoTributaria()
+                        .getSecuencial()
+        );
+
+        nuevaFactura.setDirMatriz(
+                facturaDto
+                        .getInfoTributaria()
+                        .getDirMatriz()
+        );
+
+        nuevaFactura.setDirEstablecimiento(
+                facturaDto
+                        .getInfoFactura()
+                        .getDirEstablecimiento()
+        );
+
+        nuevaFactura.setFechaEmision(
+                LocalDate.parse(
+                        facturaDto
+                                .getInfoFactura()
+                                .getFechaEmision(),
+                        DateTimeFormatter.ofPattern("dd/MM/yyyy")
+                )
+        );
+
+        nuevaFactura.setTotalSinImpuestos(
+                BigDecimal.valueOf(
+                        facturaDto
+                                .getInfoFactura()
+                                .getTotalSinImpuestos()
+                )
+        );
+
+        nuevaFactura.setTotalDescuento(
+                BigDecimal.valueOf(
+                        facturaDto
+                                .getInfoFactura()
+                                .getTotalDescuento()
+                )
+        );
+
+        nuevaFactura.setImporteTotal(
+                BigDecimal.valueOf(
+                        facturaDto
+                                .getInfoFactura()
+                                .getImporteTotal()
+                )
+        );
+
+        nuevaFactura.setEstadoSri("AUTORIZADO");
+
+        nuevaFactura.setFechaAutorizacion(ahora);
+
+        nuevaFactura.setNumeroAutorizacion(
+                facturaDto
+                        .getInfoTributaria()
+                        .getClaveAcceso()
+        );
+
+        /*
+         * ============================================================
+         * 4. FORMAS DE PAGO
+         * ============================================================
+         */
+        if (facturaDto.getInfoFactura().getPagos() != null
+                && facturaDto
+                .getInfoFactura()
+                .getPagos()
+                .getPago() != null) {
+
+            for (PagoDto pagoDto :
+                    facturaDto
+                            .getInfoFactura()
+                            .getPagos()
+                            .getPago()) {
+
+                FormaPago formaPago = new FormaPago();
+
+                formaPago.setFormaPago(
+                        pagoDto.getFormaPago()
+                );
+
+                formaPago.setTotal(
+                        BigDecimal.valueOf(
+                                pagoDto.getTotal()
+                        )
+                );
+
+                formaPago.setPlazo(
+                        BigDecimal.valueOf(
+                                pagoDto.getPlazo() != null
+                                        ? pagoDto.getPlazo()
+                                        : 0
+                        )
+                );
+
+                formaPago.setUnidadTiempo(
+                        pagoDto.getUnidadTiempo() != null
+                                ? pagoDto.getUnidadTiempo()
+                                : "dias"
+                );
+
+                nuevaFactura.addFormaPago(
+                        formaPago
+                );
+            }
+        }
+
+        /*
+         * ============================================================
+         * 5. PROCESAR DETALLES
+         * ============================================================
+         */
+
+        int count = 0;
+
+        for (FacturaDetalleDto prod :
+                facturaDto
+                        .getDetalles()
+                        .getDetalle()) {
+
+            /*
+             * --------------------------------------------------------
+             * 5.1 Crear detalle de factura
+             * --------------------------------------------------------
+             */
+            FacturaDetalle detalleEntidad =
+                    new FacturaDetalle();
+
+            detalleEntidad.setCodigoPrincipal(
+                    prod.getCodigoPrincipal()
+            );
+
+            detalleEntidad.setCodigoAuxiliar(
+                    prod.getCodigoAuxiliar() != null
+                            ? prod.getCodigoAuxiliar()
+                            : prod.getCodigoPrincipal()
+            );
+
+            detalleEntidad.setDescripcion(
+                    prod.getDescripcion()
+            );
+
+            detalleEntidad.setCantidad(
+                    BigDecimal.valueOf(
+                            prod.getCantidad()
+                    )
+            );
+
+            detalleEntidad.setPrecioUnitario(
+                    BigDecimal.valueOf(
+                            prod.getPrecioUnitario()
+                    )
+            );
+
+            detalleEntidad.setDescuento(
+                    prod.getDescuento() != null
+                            ? BigDecimal.valueOf(
+                            prod.getDescuento()
+                    )
+                            : BigDecimal.ZERO
+            );
+
+            detalleEntidad.setPrecioTotalSinImpuesto(
+                    BigDecimal.valueOf(
+                            prod.getPrecioTotalSinImpuesto()
+                    )
+            );
+
+            /*
+             * --------------------------------------------------------
+             * 5.2 Impuestos del detalle
+             * --------------------------------------------------------
+             */
+            if (prod.getImpuestos() != null
+                    && prod
+                    .getImpuestos()
+                    .getImpuesto() != null) {
+
+                for (ImpuestoDetalleDto impDto :
+                        prod
+                                .getImpuestos()
+                                .getImpuesto()) {
+
+                    DetalleImpuesto detalleImpuesto =
+                            new DetalleImpuesto();
+
+                    detalleImpuesto.setCodigo(
+                            impDto.getCodigo()
+                    );
+
+                    detalleImpuesto.setCodigoPorcentaje(
+                            impDto.getCodigoPorcentaje()
+                    );
+
+                    detalleImpuesto.setTarifa(
+                            BigDecimal.valueOf(
+                                    impDto.getTarifa()
+                            )
+                    );
+
+                    detalleImpuesto.setBaseInponible(
+                            BigDecimal.valueOf(
+                                    impDto.getBaseImponible()
+                            )
+                    );
+
+                    detalleImpuesto.setValor(
+                            BigDecimal.valueOf(
+                                    impDto.getValor()
+                            )
+                    );
+
+                    detalleEntidad.addImpuesto(
+                            detalleImpuesto
+                    );
                 }
             }
-            /* --- FIN DE TU LÓGICA DE INVENTARIO Y STOCK ACTUAL --- */
 
-            System.out.println("Guardando factura en local: " + localDestino);
-            System.out.println("Total procesado: $" + total);
-            count++;
-        }
-
-        // 6. GUARDADO EN CASCADA DE LA FACTURA ELECTRÓNICA COMPLETA
-        if (count > 0) {
-            nuevaFactura = repoFactura.save(nuevaFactura);
-        }
-
-        // 7. RESPUESTA DE LA API SEGÚN EL RESULTADO DEL PROCESAMIENTO
-        ApiResponse<ProductoResponse> response = null;
-        if (count > 0) {
-            System.out.println("Total de productos guardados: " + count);
-            response = new ApiResponse<>(
-                    HttpStatus.CREATED.value(),
-                    "FACTURA Y PRODUCTOS REGISTRADOS CORRECTAMENTE",
-                    null
+            nuevaFactura.addDetalle(
+                    detalleEntidad
             );
-            return new ResponseEntity<>(response, HttpStatus.CREATED);
-        } else {
-            System.out.println("Error al guardar productos de factura ");
-            response = new ApiResponse<>(
-                    HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                    "ERROR AL REGISTRAR LA FACTURA",
-                    null
-            );
-            return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+
+            /*
+             * --------------------------------------------------------
+             * 5.3 Buscar producto vigente
+             * --------------------------------------------------------
+             */
+            Producto existeProducto =
+                    repoProducto.findByCodProductoProveedor(
+                            prod.getCodigoPrincipal(),
+                            LocalDateTime.of(
+                                    2999,
+                                    12,
+                                    31,
+                                    0,
+                                    0,
+                                    0
+                            )
+                    );
+
+            /*
+             * ========================================================
+             * 6. PRODUCTO NUEVO
+             * ========================================================
+             */
+            if (existeProducto == null) {
+
+                Integer nuevaSecuencia =
+                        getSiguienteSecuencia();
+
+                /*
+                 * ----------------------------------------------------
+                 * 6.1 Crear Producto
+                 * ----------------------------------------------------
+                 */
+                ProductoPk pk =
+                        new ProductoPk();
+
+                pk.setSecProducto(
+                        nuevaSecuencia
+                );
+
+                pk.setFechaFin(
+                        LocalDateTime.of(
+                                2999,
+                                12,
+                                31,
+                                0,
+                                0,
+                                0
+                        )
+                );
+
+                Producto nuevoProducto =
+                        new Producto();
+
+                nuevoProducto.setId(pk);
+
+                nuevoProducto.setFechaInicio(
+                        ahora
+                );
+
+                nuevoProducto.setCodProductoProveedor(
+                        prod.getCodigoPrincipal()
+                );
+
+                nuevoProducto.setDescripcion(
+                        prod.getDescripcion()
+                );
+
+                nuevoProducto.setPrecioVenta(
+                        new BigDecimal(
+                                prod.getPrecioVentaPvp()
+                        )
+                );
+
+                nuevoProducto.setCodEstado(
+                        "ACT"
+                );
+
+                nuevoProducto.setFechaIngreso(
+                        ahora
+                );
+
+                nuevoProducto.setCodUsuarioIngreso(
+                        "1"
+                );
+
+                nuevoProducto.setCodBarra(
+                        null
+                );
+
+                /*
+                 * Factura que originó el producto
+                 */
+                nuevoProducto.setCodIdFactura(
+                        nuevaFactura.getId()
+                );
+
+                nuevoProducto =
+                        repoProducto.save(
+                                nuevoProducto
+                        );
+
+                /*
+                 * ----------------------------------------------------
+                 * 6.2 Crear ProductoLocal
+                 * ----------------------------------------------------
+                 */
+                ProductoLocalPk plPk =
+                        new ProductoLocalPk();
+
+                plPk.setSecLocal(
+                        Long.parseLong(localDestino)
+                );
+
+                plPk.setSecProducto(
+                        nuevaSecuencia
+                );
+
+                plPk.setFechaFin(
+                        LocalDateTime.of(
+                                2999,
+                                12,
+                                31,
+                                0,
+                                0,
+                                0
+                        )
+                );
+
+                ProductoLocal nuevoProductoLocal =
+                        new ProductoLocal();
+
+                nuevoProductoLocal.setId(
+                        plPk
+                );
+
+                nuevoProductoLocal.setFechaInicio(
+                        ahora
+                );
+
+                nuevoProductoLocal.setCantidad(
+                        prod
+                                .getCantidadModificada()
+                                .intValue()
+                );
+
+                nuevoProductoLocal.setFechaIngreso(
+                        ahora
+                );
+
+                nuevoProductoLocal.setCodUsuarioIngreso(
+                        "1"
+                );
+
+                /*
+                 * Factura que originó el ingreso de inventario
+                 */
+                nuevoProductoLocal.setIdFactura(
+                        nuevaFactura.getId()
+                );
+
+                repoProductoLocal.save(
+                        nuevoProductoLocal
+                );
+
+                /*
+                 * Se procesó correctamente el producto
+                 */
+                count++;
+
+            } else {
+
+                /*
+                 * ====================================================
+                 * 7. PRODUCTO EXISTENTE Y ACTIVO
+                 * ====================================================
+                 */
+                if ("ACT".equals(
+                        existeProducto.getCodEstado()
+                )) {
+
+                    /*
+                     * ------------------------------------------------
+                     * 7.1 Crear versión histórica de Producto
+                     * ------------------------------------------------
+                     */
+                    Producto histProducto =
+                            new Producto();
+
+                    BeanUtils.copyProperties(
+                            existeProducto,
+                            histProducto,
+                            "id"
+                    );
+
+                    ProductoPk historialProductoPk =
+                            new ProductoPk();
+
+                    historialProductoPk.setSecProducto(
+                            existeProducto
+                                    .getId()
+                                    .getSecProducto()
+                    );
+
+                    historialProductoPk.setFechaFin(
+                            ahora
+                    );
+
+                    histProducto.setId(
+                            historialProductoPk
+                    );
+
+                    repoProducto.save(
+                            histProducto
+                    );
+
+                    /*
+                     * ------------------------------------------------
+                     * 7.2 Actualizar Producto vigente
+                     * ------------------------------------------------
+                     */
+                    existeProducto.setPrecioVenta(
+                            new BigDecimal(
+                                    prod.getPrecioVentaPvp()
+                            )
+                    );
+
+                    existeProducto.setCodUsuarioModificacion(
+                            "1"
+                    );
+
+                    existeProducto.setFechaModificacion(
+                            ahora
+                    );
+
+                    /*
+                     * Nueva factura que actualizó el producto
+                     */
+                    existeProducto.setCodIdFactura(
+                            nuevaFactura.getId()
+                    );
+
+                    repoProducto.save(
+                            existeProducto
+                    );
+
+                    /*
+                     * ------------------------------------------------
+                     * 7.3 Buscar ProductoLocal vigente
+                     * ------------------------------------------------
+                     */
+                    ProductoLocal existeProductoLocal =
+                            repoProductoLocal.findById(
+                                    Long.parseLong(localDestino),
+                                    existeProducto
+                                            .getId()
+                                            .getSecProducto(),
+                                    LocalDateTime.of(
+                                            2999,
+                                            12,
+                                            31,
+                                            0,
+                                            0,
+                                            0
+                                    )
+                            );
+
+                    /*
+                     * =================================================
+                     * 7.4 EL PRODUCTO EXISTE PERO NO EN ESTE LOCAL
+                     * =================================================
+                     */
+                    if (existeProductoLocal == null) {
+
+                        ProductoLocalPk nuevoLocalPk =
+                                new ProductoLocalPk();
+
+                        nuevoLocalPk.setSecLocal(
+                                Long.parseLong(localDestino)
+                        );
+
+                        nuevoLocalPk.setSecProducto(
+                                existeProducto
+                                        .getId()
+                                        .getSecProducto()
+                        );
+
+                        nuevoLocalPk.setFechaFin(
+                                LocalDateTime.of(
+                                        2999,
+                                        12,
+                                        31,
+                                        0,
+                                        0,
+                                        0
+                                )
+                        );
+
+                        ProductoLocal nuevoProductoLocal =
+                                new ProductoLocal();
+
+                        nuevoProductoLocal.setId(
+                                nuevoLocalPk
+                        );
+
+                        nuevoProductoLocal.setFechaInicio(
+                                ahora
+                        );
+
+                        nuevoProductoLocal.setCantidad(
+                                prod
+                                        .getCantidadModificada()
+                                        .intValue()
+                        );
+
+                        nuevoProductoLocal.setFechaIngreso(
+                                ahora
+                        );
+
+                        nuevoProductoLocal.setCodUsuarioIngreso(
+                                "1"
+                        );
+
+                        /*
+                         * Factura que generó el ingreso
+                         */
+                        nuevoProductoLocal.setIdFactura(
+                                nuevaFactura.getId()
+                        );
+
+                        repoProductoLocal.save(
+                                nuevoProductoLocal
+                        );
+
+                    } else {
+
+                        /*
+                         * =================================================
+                         * 7.5 EL PRODUCTO YA EXISTE EN EL LOCAL
+                         * =================================================
+                         */
+
+                        /*
+                         * ---------------------------------------------
+                         * Crear versión histórica de ProductoLocal
+                         * ---------------------------------------------
+                         */
+                        ProductoLocal histProductoLocal =
+                                new ProductoLocal();
+
+                        BeanUtils.copyProperties(
+                                existeProductoLocal,
+                                histProductoLocal,
+                                "id"
+                        );
+
+                        ProductoLocalPk histProductoLocalPk =
+                                new ProductoLocalPk();
+
+                        histProductoLocalPk.setFechaFin(
+                                ahora
+                        );
+
+                        histProductoLocalPk.setSecLocal(
+                                existeProductoLocal
+                                        .getId()
+                                        .getSecLocal()
+                        );
+
+                        histProductoLocalPk.setSecProducto(
+                                existeProductoLocal
+                                        .getId()
+                                        .getSecProducto()
+                        );
+
+                        histProductoLocal.setId(
+                                histProductoLocalPk
+                        );
+
+                        /*
+                         * Aquí BeanUtils ya copió el idFactura
+                         * correspondiente a la versión anterior.
+                         */
+                        repoProductoLocal.save(
+                                histProductoLocal
+                        );
+
+                        /*
+                         * ---------------------------------------------
+                         * Actualizar stock vigente
+                         * ---------------------------------------------
+                         */
+                        Integer cantidadActual =
+                                existeProductoLocal.getCantidad();
+
+                        Integer cantidadNueva =
+                                cantidadActual
+                                        + prod
+                                        .getCantidad()
+                                        .intValue();
+
+                        existeProductoLocal.setCantidad(
+                                cantidadNueva
+                        );
+
+                        /*
+                         * La versión vigente queda asociada
+                         * a la nueva factura.
+                         */
+                        existeProductoLocal.setIdFactura(
+                                nuevaFactura.getId()
+                        );
+
+                        existeProductoLocal.setCodUsuarioModificacion(
+                                "1"
+                        );
+
+                        existeProductoLocal.setFechaModificacion(
+                                ahora
+                        );
+
+                        repoProductoLocal.save(
+                                existeProductoLocal
+                        );
+                    }
+
+                    /*
+                     * Se procesó correctamente el producto
+                     */
+                    count++;
+
+                } else {
+
+                    /*
+                     * Producto existente pero inactivo.
+                     *
+                     * No se actualiza inventario.
+                     */
+                    System.out.println(
+                            "Producto INACTIVO - NO actualizar: "
+                                    + prod.getCodigoPrincipal()
+                    );
+                }
+            }
         }
 
+        /*
+         * ============================================================
+         * 8. GUARDAR FACTURA
+         * ============================================================
+         */
+        if (count > 0) {
+
+            repoFactura.save(
+                    nuevaFactura
+            );
+
+            System.out.println(
+                    "Total de productos guardados: "
+                            + count
+            );
+
+            ApiResponse<ProductoResponse> response =
+                    new ApiResponse<>(
+                            HttpStatus.CREATED.value(),
+                            "FACTURA Y PRODUCTOS REGISTRADOS CORRECTAMENTE",
+                            null
+                    );
+
+            return ResponseEntity
+                    .status(HttpStatus.CREATED)
+                    .body(response);
+        }
+
+        /*
+         * ============================================================
+         * 9. NINGÚN PRODUCTO FUE PROCESADO
+         * ============================================================
+         */
+        System.out.println(
+                "Error al guardar productos de factura"
+        );
+
+        ApiResponse<ProductoResponse> response =
+                new ApiResponse<>(
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        "ERROR AL REGISTRAR LA FACTURA",
+                        null
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(response);
     }
 
     public Integer getSiguienteSecuencia() {
@@ -277,5 +947,301 @@ public class FacturaController {
     public Integer getSiguienteSecuenciaFactura() {
         Integer maxActual = repoFactura.getMaxSecuencia();
         return maxActual + 1;
+    }
+
+    /*mapear para Dto*/
+    private FacturaResponseDto convertirFacturaDto(
+            Factura factura
+    ) {
+
+        FacturaResponseDto dto =
+                new FacturaResponseDto();
+
+        /*
+         * ============================================================
+         * DATOS DE FACTURA
+         * ============================================================
+         */
+
+        dto.setId(
+                factura.getId()
+        );
+
+        dto.setAmbiente(
+                factura.getAmbiente()
+        );
+
+        dto.setTipoEmision(
+                factura.getTipoEmision()
+        );
+
+        dto.setRazonSocial(
+                factura.getRazonSocial()
+        );
+
+        dto.setNombreComercial(
+                factura.getNombreComercial()
+        );
+
+        dto.setRuc(
+                factura.getRuc()
+        );
+
+        dto.setClaveAcceso(
+                factura.getClaveAcceso()
+        );
+
+        dto.setCodDoc(
+                factura.getCodDoc()
+        );
+
+        dto.setEstab(
+                factura.getEstab()
+        );
+
+        dto.setPtoEmi(
+                factura.getPtoEmi()
+        );
+
+        dto.setSecuencial(
+                factura.getSecuencial()
+        );
+
+        dto.setDirMatriz(
+                factura.getDirMatriz()
+        );
+
+        dto.setDirEstablecimiento(
+                factura.getDirEstablecimiento()
+        );
+
+        dto.setFechaEmision(
+                factura.getFechaEmision()
+        );
+
+        dto.setTotalSinImpuestos(
+                factura.getTotalSinImpuestos()
+        );
+
+        dto.setTotalDescuento(
+                factura.getTotalDescuento()
+        );
+
+        dto.setImporteTotal(
+                factura.getImporteTotal()
+        );
+
+        /*
+         * ============================================================
+         * CONTROL SRI
+         * ============================================================
+         */
+
+        dto.setEstadoSri(
+                factura.getEstadoSri()
+        );
+
+        dto.setFechaAutorizacion(
+                factura.getFechaAutorizacion()
+        );
+
+        dto.setNumeroAutorizacion(
+                factura.getNumeroAutorizacion()
+        );
+
+        /*
+         * ============================================================
+         * CONTRIBUYENTE
+         * ============================================================
+         */
+
+        if (factura.getContribuyente() != null) {
+
+            Contribuyente contribuyente =
+                    factura.getContribuyente();
+
+            ContribuyenteResponseDto contribuyenteDto =
+                    new ContribuyenteResponseDto();
+
+            contribuyenteDto.setId(
+                    contribuyente.getId()
+            );
+
+            contribuyenteDto.setTipoIdentificacion(
+                    contribuyente.getTipoIdentificacion()
+            );
+
+            contribuyenteDto.setIdentificacion(
+                    contribuyente.getIdentificacion()
+            );
+
+            contribuyenteDto.setRazonSocial(
+                    contribuyente.getRazonSocial()
+            );
+
+            contribuyenteDto.setDireccion(
+                    contribuyente.getDireccion()
+            );
+
+            dto.setContribuyente(
+                    contribuyenteDto
+            );
+        }
+
+        /*
+         * ============================================================
+         * DETALLES
+         * ============================================================
+         */
+
+        List<FacturaDetalleResponseDto> detalles =
+                factura.getDetalles() == null
+                        ? Collections.emptyList()
+                        : factura.getDetalles()
+                        .stream()
+                        .map(this::convertirDetalleDto)
+                        .toList();
+
+        dto.setDetalles(
+                detalles
+        );
+
+        /*
+         * ============================================================
+         * FORMAS DE PAGO
+         * ============================================================
+         */
+
+        List<FormaPagoResponseDto> formasPago =
+                factura.getFormasPago() == null
+                        ? Collections.emptyList()
+                        : factura.getFormasPago()
+                        .stream()
+                        .map(this::convertirFormaPagoDto)
+                        .toList();
+
+        dto.setFormasPago(
+                formasPago
+        );
+
+        return dto;
+    }
+
+    private FacturaDetalleResponseDto convertirDetalleDto(
+            FacturaDetalle detalle
+    ) {
+
+        FacturaDetalleResponseDto dto =
+                new FacturaDetalleResponseDto();
+
+        dto.setId(
+                detalle.getId()
+        );
+
+        dto.setCodigoPrincipal(
+                detalle.getCodigoPrincipal()
+        );
+
+        dto.setCodigoAuxiliar(
+                detalle.getCodigoAuxiliar()
+        );
+
+        dto.setDescripcion(
+                detalle.getDescripcion()
+        );
+
+        dto.setCantidad(
+                detalle.getCantidad()
+        );
+
+        dto.setPrecioUnitario(
+                detalle.getPrecioUnitario()
+        );
+
+        dto.setDescuento(
+                detalle.getDescuento()
+        );
+
+        dto.setPrecioTotalSinImpuesto(
+                detalle.getPrecioTotalSinImpuesto()
+        );
+
+        List<DetalleImpuestoResponseDto> impuestos =
+                detalle.getImpuestos() == null
+                        ? Collections.emptyList()
+                        : detalle.getImpuestos()
+                        .stream()
+                        .map(this::convertirImpuestoDto)
+                        .toList();
+
+        dto.setImpuestos(
+                impuestos
+        );
+
+        return dto;
+    }
+
+    private DetalleImpuestoResponseDto convertirImpuestoDto(
+            DetalleImpuesto impuesto
+    ) {
+
+        DetalleImpuestoResponseDto dto =
+                new DetalleImpuestoResponseDto();
+
+        dto.setId(
+                impuesto.getId()
+        );
+
+        dto.setCodigo(
+                impuesto.getCodigo()
+        );
+
+        dto.setCodigoPorcentaje(
+                impuesto.getCodigoPorcentaje()
+        );
+
+        dto.setTarifa(
+                impuesto.getTarifa()
+        );
+
+        dto.setBaseInponible(
+                impuesto.getBaseInponible()
+        );
+
+        dto.setValor(
+                impuesto.getValor()
+        );
+
+        return dto;
+    }
+
+    private FormaPagoResponseDto convertirFormaPagoDto(
+            FormaPago formaPago
+    ) {
+
+        FormaPagoResponseDto dto =
+                new FormaPagoResponseDto();
+
+        dto.setId(
+                formaPago.getId()
+        );
+
+        dto.setFormaPago(
+                formaPago.getFormaPago()
+        );
+
+        dto.setTotal(
+                formaPago.getTotal()
+        );
+
+        dto.setPlazo(
+                formaPago.getPlazo()
+        );
+
+        dto.setUnidadTiempo(
+                formaPago.getUnidadTiempo()
+        );
+
+        return dto;
     }
 }

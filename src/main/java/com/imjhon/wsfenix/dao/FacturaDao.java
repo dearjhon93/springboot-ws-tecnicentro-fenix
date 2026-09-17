@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Repository
 public interface FacturaDao extends JpaRepository<Factura,Long> {
@@ -20,4 +21,15 @@ public interface FacturaDao extends JpaRepository<Factura,Long> {
 
     @Query("SELECT COALESCE(MAX(f.id), 0) FROM Factura f")
     Integer getMaxSecuencia();
+
+    @Query("""
+        SELECT DISTINCT f
+        FROM Factura f
+        LEFT JOIN FETCH f.contribuyente
+        LEFT JOIN FETCH f.detalles d
+        LEFT JOIN FETCH d.impuestos
+        LEFT JOIN FETCH f.formasPago
+        ORDER BY f.id DESC
+    """)
+    List<Factura> findTodasConDetalles();
 }
