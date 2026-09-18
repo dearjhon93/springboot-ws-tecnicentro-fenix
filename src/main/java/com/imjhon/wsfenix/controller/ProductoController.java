@@ -1,9 +1,11 @@
 package com.imjhon.wsfenix.controller;
 
+import com.imjhon.wsfenix.dao.FacturaDao;
 import com.imjhon.wsfenix.dao.LocalDao;
 import com.imjhon.wsfenix.dao.ProductoDao;
 import com.imjhon.wsfenix.dao.ProductoLocalDao;
 import com.imjhon.wsfenix.dto.*;
+import com.imjhon.wsfenix.dto.factura.dao.Factura;
 import com.imjhon.wsfenix.dto.response.PageResponse;
 import com.imjhon.wsfenix.entity.*;
 import com.imjhon.wsfenix.util.ApiResponse;
@@ -31,6 +33,9 @@ public class ProductoController {
 
     @Autowired
     private LocalDao repoLocal;
+
+    @Autowired
+    private FacturaDao repoFactura;
 
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ProductoDto>>> getProductos(
@@ -179,6 +184,43 @@ public class ProductoController {
 
 
         // =========================================================
+        // 7.1 Obtener números completos de factura
+        // (estab-ptoEmi-secuencial) para idFactura de locales,
+        // historial y producto. Se mantiene idFactura y se agrega
+        // numFactura sin romper compatibilidad.
+        // =========================================================
+
+        Set<Long> idsFacturas = new HashSet<>();
+
+        productos.forEach(p -> {
+            if (p.getCodIdFactura() != null) {
+                idsFacturas.add(p.getCodIdFactura());
+            }
+        });
+
+        productosLocales.forEach(pl -> {
+            if (pl.getIdFactura() != null) {
+                idsFacturas.add(pl.getIdFactura());
+            }
+        });
+
+        historialProductoLocal.forEach(pl -> {
+            if (pl.getIdFactura() != null) {
+                idsFacturas.add(pl.getIdFactura());
+            }
+        });
+
+        Map<Long, String> numFacturaMap = idsFacturas.isEmpty()
+                ? Collections.emptyMap()
+                : repoFactura.findAllById(idsFacturas).stream()
+                .collect(Collectors.toMap(
+                        Factura::getId,
+                        this::formatearNumeroFactura,
+                        (a, b) -> a
+                ));
+
+
+        // =========================================================
         // 8. Convertir productos a DTO
         // =========================================================
 
@@ -206,7 +248,8 @@ public class ProductoController {
                             producto,
                             localesProducto,
                             historialProducto,
-                            localesMap
+                            localesMap,
+                            numFacturaMap
                     );
                 })
                 .toList();
@@ -343,7 +386,8 @@ public class ProductoController {
             Producto producto,
             List<ProductoLocal> localesProducto,
             List<ProductoLocal> historialProducto,
-            Map<Long, Local> localesMap
+            Map<Long, Local> localesMap,
+            Map<Long, String> numFacturaMap
     ) {
 
         ProductoDto dto = new ProductoDto();
@@ -370,6 +414,16 @@ public class ProductoController {
 
         dto.setNomProveedor("");
 
+        dto.setIdFactura(
+                producto.getCodIdFactura()
+        );
+
+        dto.setNumFactura(
+                producto.getCodIdFactura() != null
+                        ? numFacturaMap.get(producto.getCodIdFactura())
+                        : null
+        );
+
 
         // =========================================================
         // Locales actuales
@@ -387,6 +441,12 @@ public class ProductoController {
 
                             localDto.setSecLocal(secLocal);
                             localDto.setCantidad(pl.getCantidad());
+                            localDto.setIdFactura(pl.getIdFactura());
+                            localDto.setNumFactura(
+                                    pl.getIdFactura() != null
+                                            ? numFacturaMap.get(pl.getIdFactura())
+                                            : null
+                            );
 
                             Local local =
                                     localesMap.get(secLocal);
@@ -438,6 +498,12 @@ public class ProductoController {
                                     pl.getIdFactura()
                             );
 
+                            historial.setNumFactura(
+                                    pl.getIdFactura() != null
+                                            ? numFacturaMap.get(pl.getIdFactura())
+                                            : null
+                            );
+
                             Local local =
                                     localesMap.get(secLocal);
 
@@ -454,5 +520,26 @@ public class ProductoController {
         dto.setHistorial(historialDto);
 
         return dto;
+    }
+
+    /**
+     * Número completo de factura SRI: estab-ptoEmi-secuencial
+     * (ej: 001-001-000000123). Si falta alguna parte se devuelve
+     * lo disponible sin romper.
+     */
+    private String formatearNumeroFactura(Factura factura) {
+        if (factura == null) {
+            return null;
+        }
+
+        String estab = factura.getEstab() != null ? factura.getEstab() : "";
+        String ptoEmi = factura.getPtoEmi() != null ? factura.getPtoEmi() : "";
+        String secuencial = factura.getSecuencial() != null ? factura.getSecuencial() : "";
+
+        if (estab.isEmpty() && ptoEmi.isEmpty() && secuencial.isEmpty()) {
+            return null;
+        }
+
+        return estab + "-" + ptoEmi + "-" + secuencial;
     }
 }

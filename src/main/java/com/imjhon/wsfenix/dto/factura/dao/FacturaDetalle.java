@@ -3,6 +3,7 @@ package com.imjhon.wsfenix.dto.factura.dao;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,7 @@ public class FacturaDetalle {
     private BigDecimal precioTotalSinImpuesto;
 
     // Relación bidireccional con sus impuestos
+    @BatchSize(size = 50)
     @OneToMany(mappedBy = "facturaDetalle", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DetalleImpuesto> impuestos = new ArrayList<>();
 

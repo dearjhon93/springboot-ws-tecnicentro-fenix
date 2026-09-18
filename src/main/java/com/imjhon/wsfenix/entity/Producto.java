@@ -63,4 +63,9 @@ public class Producto {
 
     @Column(name = "cod_id_factura")
     private Long codIdFactura;
+
+    @PrePersist
+    protected void onCreate() {
+        this.fechaInicio = LocalDateTime.now();
+    }
 }

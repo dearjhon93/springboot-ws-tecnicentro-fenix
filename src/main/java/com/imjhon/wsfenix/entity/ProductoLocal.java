@@ -62,5 +62,10 @@ public class ProductoLocal {
     @JsonBackReference
     private Producto producto;
 
+    @PrePersist
+    protected void onCreate() {
+        this.fechaInicio = LocalDateTime.now();
+    }
+
 
 }

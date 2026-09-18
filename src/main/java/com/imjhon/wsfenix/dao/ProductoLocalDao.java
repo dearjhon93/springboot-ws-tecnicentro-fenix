@@ -4,6 +4,7 @@ import com.imjhon.wsfenix.entity.Producto;
 import com.imjhon.wsfenix.entity.ProductoLocal;
 import com.imjhon.wsfenix.entity.ProductoLocalPk;
 import com.imjhon.wsfenix.entity.ProductoPk;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -42,6 +43,24 @@ public interface ProductoLocalDao extends JpaRepository<ProductoLocal, ProductoL
     List<ProductoLocal> findHistorialByProductos(
             @Param("secuencias") List<Long> secuencias
     );
+
+    @Query("""
+        SELECT COUNT(pl)
+        FROM ProductoLocal pl
+        WHERE pl.id.fechaFin >= CURRENT_TIMESTAMP
+          AND COALESCE(pl.cantidad, 0) <= :umbral
+    """)
+    long countStockBajo(@Param("umbral") int umbral);
+
+    @Query("""
+        SELECT pl.id.secProducto, p.descripcion, pl.cantidad, pl.id.secLocal
+        FROM ProductoLocal pl
+        JOIN pl.producto p
+        WHERE pl.id.fechaFin >= CURRENT_TIMESTAMP
+          AND COALESCE(pl.cantidad, 0) <= :umbral
+        ORDER BY COALESCE(pl.cantidad, 0) ASC
+    """)
+    List<Object[]> stockBajoDetalle(@Param("umbral") int umbral, Pageable pageable);
 
 }
 

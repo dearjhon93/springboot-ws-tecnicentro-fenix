@@ -7,4 +7,6 @@ public class ProductoLocalDto {
     private long secLocal;
     private String desLocal;
     private Integer cantidad;
+    private Long idFactura;
+    private String numFactura;
 }

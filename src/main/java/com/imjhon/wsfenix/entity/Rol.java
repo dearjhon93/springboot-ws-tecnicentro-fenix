@@ -3,6 +3,7 @@ package com.imjhon.wsfenix.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -28,5 +29,10 @@ public class Rol {
 
     @Column(name = "cod_estado")
     private String codEstado;
+
+    @PrePersist
+    protected void onCreate() {
+        this.fechaInicio = LocalDateTime.now();
+    }
 
 }

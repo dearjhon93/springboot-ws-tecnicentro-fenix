@@ -49,11 +49,12 @@ public class FacturaController {
     private ContribuyenteDao repoContribuyente;
 
 
-    /*@GetMapping("/compras")
+    @Transactional(readOnly = true)
+    @GetMapping("/compras")
     public ResponseEntity<?> obtenerFacturasCompras() {
 
         List<Factura> facturas =
-                repoFactura.findTodasConDetalles();
+                repoFactura.findTodasConContribuyente();
 
         List<FacturaResponseDto> respuesta =
                 facturas.stream()
@@ -70,7 +71,7 @@ public class FacturaController {
                 );
 
         return ResponseEntity.ok(response);
-    }*/
+    }
 
     @Transactional
     @PostMapping("/guardar")
@@ -106,41 +107,42 @@ public class FacturaController {
 
         /*
          * ============================================================
-         * 2. OBTENER / CREAR CONTRIBUYENTE
+         * 2. OBTENER / CREAR PROVEEDOR (emisor de la factura)
+         * En una factura de COMPRA el contribuyente es quien EMITE
+         * (infoTributaria: ruc + razonSocial del proveedor), NO el
+         * comprador (infoFactura), que es nuestra propia empresa.
+         * El emisor SRI siempre se identifica con RUC (tipo "04").
          * ============================================================
          */
+        String identificacionProveedor =
+                facturaDto
+                        .getInfoTributaria()
+                        .getRuc();
+
         Contribuyente contribuyente =
                 repoContribuyente.findByIdentificacion(
-                        facturaDto
-                                .getInfoFactura()
-                                .getIdentificacionComprador()
+                        identificacionProveedor
                 ).orElseGet(() -> {
 
                     Contribuyente nuevoContribuyente =
                             new Contribuyente();
 
-                    nuevoContribuyente.setTipoIdentificacion(
-                            facturaDto
-                                    .getInfoFactura()
-                                    .getTipoIdentificacionComprador()
-                    );
+                    nuevoContribuyente.setTipoIdentificacion("04");
 
                     nuevoContribuyente.setIdentificacion(
-                            facturaDto
-                                    .getInfoFactura()
-                                    .getIdentificacionComprador()
+                            identificacionProveedor
                     );
 
                     nuevoContribuyente.setRazonSocial(
                             facturaDto
-                                    .getInfoFactura()
-                                    .getRazonSocialComprador()
+                                    .getInfoTributaria()
+                                    .getRazonSocial()
                     );
 
                     nuevoContribuyente.setDireccion(
                             facturaDto
-                                    .getInfoFactura()
-                                    .getDireccionComprador()
+                                    .getInfoTributaria()
+                                    .getDirMatriz()
                     );
 
                     return repoContribuyente.save(
@@ -656,6 +658,15 @@ public class FacturaController {
                             historialProductoPk
                     );
 
+                    /*
+                     * La fecha_inicio es el momento en que se crea
+                     * el registro histórico. La fecha_fin (ahora)
+                     * ya quedó en el PK y no se modifica.
+                     */
+                    histProducto.setFechaInicio(
+                            ahora
+                    );
+
                     repoProducto.save(
                             histProducto
                     );
@@ -821,6 +832,15 @@ public class FacturaController {
 
                         histProductoLocal.setId(
                                 histProductoLocalPk
+                        );
+
+                        /*
+                         * La fecha_inicio es el momento en que se crea
+                         * el registro histórico. La fecha_fin (ahora)
+                         * ya quedó en el PK y no se modifica.
+                         */
+                        histProductoLocal.setFechaInicio(
+                                ahora
                         );
 
                         /*

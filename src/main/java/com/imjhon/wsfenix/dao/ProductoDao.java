@@ -93,6 +93,14 @@ public interface ProductoDao extends JpaRepository<Producto, ProductoPk> {
     long countProductosActivos();
 
     @Query("""
+        SELECT COUNT(DISTINCT p.id.secProducto)
+        FROM Producto p
+        WHERE p.id.fechaFin >= CURRENT_TIMESTAMP
+          AND p.codEstado <> 'ACT'
+    """)
+    long countProductosInactivos();
+
+    @Query("""
         SELECT p
         FROM Producto p
         WHERE p.id.secProducto = :secuencia

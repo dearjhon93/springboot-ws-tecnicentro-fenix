@@ -20,4 +20,5 @@ public class ProductoHistorialDto {
     private LocalDateTime fechaModificacion;
 
     private Long idFactura;
+    private String numFactura;
 }

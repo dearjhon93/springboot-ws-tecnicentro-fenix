@@ -3,6 +3,7 @@ package com.imjhon.wsfenix.dto.factura.dao;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -67,10 +68,12 @@ public class Factura {
     private Contribuyente contribuyente;
 
     // Relación bidireccional con Detalles (Cascada Completa)
+    @BatchSize(size = 50)
     @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FacturaDetalle> detalles = new ArrayList<>();
 
     // Relación bidireccional con Formas de Pago
+    @BatchSize(size = 50)
     @OneToMany(mappedBy = "factura", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FormaPago> formasPago = new ArrayList<>();
 

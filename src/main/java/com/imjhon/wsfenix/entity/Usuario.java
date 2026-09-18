@@ -4,6 +4,7 @@ package com.imjhon.wsfenix.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -47,5 +48,10 @@ public class Usuario {
 
     @Column(name = "cod_usuario_modificacion")
     private String codUsuarioModificacion;
+
+    @PrePersist
+    protected void onCreate() {
+        this.fechaInicio = LocalDateTime.now();
+    }
 
 }
