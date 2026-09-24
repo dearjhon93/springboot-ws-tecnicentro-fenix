@@ -9,12 +9,14 @@ import com.imjhon.wsfenix.dto.factura.dao.Factura;
 import com.imjhon.wsfenix.dto.response.PageResponse;
 import com.imjhon.wsfenix.entity.*;
 import com.imjhon.wsfenix.util.ApiResponse;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -381,6 +383,95 @@ public class ProductoController {
         return maxActual + 1;
     }
 
+    /**
+     * Modifica únicamente cantidad (+ observación) del stock vigente de un
+     * producto en un local, con versionado histórico:
+     * <ul>
+     *   <li>1. Inserta copia del registro vigente con fecha_fin = ahora (caducado/histórico).</li>
+     *   <li>2. Actualiza el registro vigente (fecha_fin = 2999-12-31) con la nueva
+     *   cantidad, observación, cod_usuario_modificacion y fecha_modificacion = ahora.</li>
+     * </ul>
+     *
+     * PUT /productos/{secProducto}/locales/{secLocal}
+     * Body: { "cantidad": 50, "observacion": "ajuste inventario", "codUsuarioModificacion": "1" }
+     */
+    @PutMapping("/{secProducto}/locales/{secLocal}")
+    @Transactional
+    public ResponseEntity<?> actualizarCantidad(
+            @PathVariable Long secProducto,
+            @PathVariable Long secLocal,
+            @RequestBody ProductoCantidadUpdateRequest req
+    ) {
+        if (req == null || req.getCantidad() == null) {
+            ApiResponse<?> response = new ApiResponse<>(
+                    HttpStatus.BAD_REQUEST.value(),
+                    "ERROR: EL CAMPO CANTIDAD ES OBLIGATORIO",
+                    null);
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        if (req.getCantidad() < 0) {
+            ApiResponse<?> response = new ApiResponse<>(
+                    HttpStatus.BAD_REQUEST.value(),
+                    "ERROR: LA CANTIDAD NO PUEDE SER NEGATIVA",
+                    null);
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        LocalDateTime fechaFinVigente = LocalDateTime.of(2999, 12, 31, 0, 0, 0);
+        LocalDateTime ahora = LocalDateTime.now();
+
+        ProductoLocal vigente = repoProductoLocal.findById(
+                secLocal, secProducto, fechaFinVigente);
+
+        if (vigente == null) {
+            ApiResponse<?> response = new ApiResponse<>(
+                    HttpStatus.NOT_FOUND.value(),
+                    "ERROR: NO EXISTE STOCK VIGENTE PARA PRODUCTO " + secProducto
+                            + " EN LOCAL " + secLocal,
+                    null);
+            return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+        }
+
+        String usuarioMod = (req.getCodUsuarioModificacion() != null
+                && !req.getCodUsuarioModificacion().isBlank())
+                ? req.getCodUsuarioModificacion().trim()
+                : "1";
+
+        // 1. Caducar: insertar versión histórica con fecha_fin = ahora
+        // Se conserva fecha_inicio, cantidad y observación anteriores
+        // para que el histórico refleje el estado previo al ajuste.
+        ProductoLocal historico = new ProductoLocal();
+        BeanUtils.copyProperties(vigente, historico, "id", "producto");
+        ProductoLocalPk histPk = new ProductoLocalPk();
+        histPk.setSecLocal(vigente.getId().getSecLocal());
+        histPk.setSecProducto(vigente.getId().getSecProducto());
+        histPk.setFechaFin(ahora);
+        historico.setId(histPk);
+        repoProductoLocal.save(historico);
+
+        // 2. Vigente: solo cantidad + observación + auditoría
+        vigente.setCantidad(req.getCantidad());
+        vigente.setObservacion(req.getObservacion());
+        vigente.setCodUsuarioModificacion(usuarioMod);
+        vigente.setFechaModificacion(ahora);
+        vigente = repoProductoLocal.save(vigente);
+
+        ProductoLocalDto dto = new ProductoLocalDto();
+        dto.setSecLocal(vigente.getId().getSecLocal());
+        dto.setCantidad(vigente.getCantidad());
+        dto.setObservacion(vigente.getObservacion());
+        dto.setIdFactura(vigente.getIdFactura());
+        repoLocal.findById(vigente.getId().getSecLocal())
+                .ifPresent(local -> dto.setDesLocal(local.getNombreLocal()));
+
+        ApiResponse<ProductoLocalDto> response = new ApiResponse<>(
+                HttpStatus.OK.value(),
+                "CANTIDAD ACTUALIZADA CORRECTAMENTE",
+                dto);
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
 
     private ProductoDto convertirProductoDto(
             Producto producto,
@@ -441,6 +532,7 @@ public class ProductoController {
 
                             localDto.setSecLocal(secLocal);
                             localDto.setCantidad(pl.getCantidad());
+                            localDto.setObservacion(pl.getObservacion());
                             localDto.setIdFactura(pl.getIdFactura());
                             localDto.setNumFactura(
                                     pl.getIdFactura() != null
@@ -480,6 +572,7 @@ public class ProductoController {
 
                             historial.setSecLocal(secLocal);
                             historial.setCantidad(pl.getCantidad());
+                            historial.setObservacion(pl.getObservacion());
 
                             historial.setFechaInicio(
                                     pl.getFechaInicio()

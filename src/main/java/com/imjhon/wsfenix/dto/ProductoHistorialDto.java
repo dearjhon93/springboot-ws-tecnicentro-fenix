@@ -14,6 +14,7 @@ public class ProductoHistorialDto {
     private Long secLocal;
     private String desLocal;
     private Integer cantidad;
+    private String observacion;
 
     private LocalDateTime fechaInicio;
     private LocalDateTime fechaFin;

@@ -53,6 +53,9 @@ public class ProductoLocal {
     @Column(name = "cod_usuario_modificacion")
     private String codUsuarioModificacion;
 
+    @Column(name = "observacion")
+    private String observacion;
+
     @ManyToOne
     @JoinColumns({
             @JoinColumn(name = "fecha_fin", referencedColumnName = "fecha_fin", insertable = false, updatable = false),
