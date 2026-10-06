@@ -4,15 +4,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.imjhon.wsfenix.dto.factura.InfoFacturaDto;
 import com.imjhon.wsfenix.dto.factura.InfoTributariaDto;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
 public class FacturaVentaDto {
 
-    // Local que vende (origen del stock a descontar)
-    @NotBlank(message = "El codigo del local es obligatorio")
+    // Local que vende (origen del stock a descontar).
+    // Si el front no lo envia, el controller asigna "1" por defecto (temporal para pruebas).
     @JsonProperty("codigoLocal")
     private String codigoLocal;
 

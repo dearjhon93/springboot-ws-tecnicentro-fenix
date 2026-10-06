@@ -74,6 +74,13 @@ public class FacturaVentaController {
 
         String localOrigen = facturaVentaDto.getCodigoLocal();
 
+        // TEMPORAL PRUEBAS: si el front no envia codigoLocal, usar local 1 por defecto
+        if (localOrigen == null || localOrigen.isBlank()) {
+            localOrigen = "1";
+        } else {
+            localOrigen = localOrigen.trim();
+        }
+
         String claveAcceso =
                 facturaVentaDto
                         .getInfoTributaria()
