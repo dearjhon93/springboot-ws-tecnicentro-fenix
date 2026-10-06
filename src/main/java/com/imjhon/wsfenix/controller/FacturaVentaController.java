@@ -459,10 +459,15 @@ public class FacturaVentaController {
          * 8.1 Version historica de Producto (fechaFin = ahora)
          * 8.2 Vigente de Producto solo se audita
          *     (la venta no cambia PVP ni origen de compra)
-         * 8.3 Version historica de ProductoLocal
-         * 8.4 Vigente de ProductoLocal con cantidad restada
+         * 8.3 Version historica de ProductoLocal (foto del estado anterior)
+         * 8.4 Vigente de ProductoLocal con cantidad restada y
+         *     observacion de la factura de venta
          * ============================================================
          */
+        String numeroFacturaVenta = nuevaFactura.getEstablecimiento()
+                + "-" + nuevaFactura.getPuntoEmision()
+                + "-" + nuevaFactura.getSecuencial();
+
         for (Map.Entry<Long, Integer> entry :
                 cantidadRequerida.entrySet()) {
 
@@ -542,6 +547,8 @@ public class FacturaVentaController {
              * La fecha_inicio es el momento en que se crea
              * el registro histórico. La fecha_fin (ahora)
              * ya quedó en el PK y no se modifica.
+             * Se conserva la observacion anterior (BeanUtils ya la copio)
+             * como foto del estado previo a la venta.
              */
             histStock.setFechaInicio(ahora);
 
@@ -549,11 +556,20 @@ public class FacturaVentaController {
 
             /*
              * ---------------------------------------------
-             * 8.4 Restar cantidad al stock vigente
+             * 8.4 Restar cantidad al stock vigente y dejar
+             * trazabilidad de la factura de venta.
+             * NOTA: idFactura (Long) es FK de facturas de COMPRA,
+             * la clave de venta es String (claveAcceso SRI), por eso
+             * solo se registra en observacion.
              * ---------------------------------------------
              */
             stockVigente.setCantidad(
                     stockVigente.getCantidad() - requerido
+            );
+
+            stockVigente.setObservacion(
+                    "VENTA FACTURA " + numeroFacturaVenta
+                            + " CANT " + requerido
             );
 
             stockVigente.setCodUsuarioModificacion("1");
