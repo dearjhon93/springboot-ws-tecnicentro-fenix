@@ -43,6 +43,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/factura-venta")
@@ -51,6 +52,38 @@ public class FacturaVentaController {
     // Marca de vigencia usada en producto y productolocal (igual que en compras)
     private static final LocalDateTime VIGENTE =
             LocalDateTime.of(2999, 12, 31, 0, 0, 0);
+
+    /*
+     * Codigos de SERVICIOS que se omiten al buscar producto y al
+     * descontar stock. La factura de venta se guarda normalmente
+     * con todos sus detalles (productos + servicios).
+     */
+    private static final Set<String> CODIGOS_SERVICIO_SIN_STOCK = Set.of(
+            "TCF002",
+            "000109",
+            "TCF001",
+            "000097",
+            "000099",
+            "000119",
+            "TCF003",
+            "000098",
+            "TCF004",
+            "TCF005",
+            "120",
+            "000070",
+            "000071",
+            "000102",
+            "000077"
+    );
+
+    private static boolean esServicioSinStock(String codigo) {
+        if (codigo == null) {
+            return false;
+        }
+        return CODIGOS_SERVICIO_SIN_STOCK.contains(
+                codigo.trim().toUpperCase()
+        );
+    }
 
     @Autowired
     private ClienteDao repoCliente;
@@ -364,6 +397,15 @@ public class FacturaVentaController {
                         .getDetalle()) {
 
             String codigo = detDto.getCodigoPrincipal();
+
+            /*
+             * Servicios: se omiten al buscar producto y al
+             * descontar stock, pero si se guardan en la
+             * factura de venta (seccion 5, sin filtro).
+             */
+            if (esServicioSinStock(codigo)) {
+                continue;
+            }
 
             Producto producto =
                     repoProducto.findByCodProductoProveedor(
